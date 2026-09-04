@@ -67,9 +67,11 @@ interface AppState {
   // --- misc ---
   darkMode: boolean;
   newMailBanner: number;
+  syncError: string | null;
 
   // === application actions ===
   setAuth: (email: string | null) => void;
+  setSyncError: (message: string | null) => void;
   navigateToInbox: () => Promise<void>;
   navigateToSent: () => Promise<void>;
   openCompose: () => void;
@@ -97,6 +99,11 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, init);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    if (res.status === 401) {
+      // Session missing/expired — bounce back to the sign-in screen instead
+      // of leaving the user staring at a stuck error banner.
+      useAppStore.getState().setAuth(null);
+    }
     throw new Error(data?.message || data?.error || `Request failed (${res.status})`);
   }
   return data as T;
@@ -147,8 +154,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   darkMode: false,
   newMailBanner: 0,
+  syncError: null,
 
   setAuth: (email) => set({ authEmail: email, authChecked: true }),
+  setSyncError: (message) => set({ syncError: message }),
 
   navigateToInbox: async () => {
     set({ currentView: "inbox", currentFolder: "inbox", filters: { ...get().filters, folder: "inbox" } });

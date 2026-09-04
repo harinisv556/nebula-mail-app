@@ -1,6 +1,7 @@
 import { gmail_v1, google } from "googleapis";
 import type { GaxiosError } from "gaxios";
 import { authorizedClient, type StoredTokens } from "@/lib/auth/google";
+import { logError } from "@/lib/log-safe";
 import type { ComposeDraft, Email, EmailFilters, EmailSummary } from "@/lib/types/mail";
 import { buildGmailQuery } from "./query-builder";
 import { MailServiceError, type MailService } from "./mail-service";
@@ -52,7 +53,18 @@ export class GmailMailService implements MailService {
           this.gmail.users.messages.get({ userId: "me", id, format: "metadata", metadataHeaders: ["From", "To", "Cc", "Subject", "Date"] }),
         ),
       );
-      return messages.map((m) => normalizeToSummary(m.data));
+      // Normalize defensively: one malformed message (missing headers Gmail
+      // is inconsistent about, an unexpected MIME shape, etc.) shouldn't
+      // take down the whole list — skip it and keep the rest.
+      const summaries: EmailSummary[] = [];
+      for (const m of messages) {
+        try {
+          summaries.push(normalizeToSummary(m.data));
+        } catch (err) {
+          logError(`[gmail] skipping malformed message ${m.data.id ?? "?"}:`, err, "warn");
+        }
+      }
+      return summaries;
     } catch (err) {
       throw toMailServiceError(err, "Failed to list emails");
     }

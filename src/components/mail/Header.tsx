@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Moon, Sun, LogOut, Mail, Search } from "lucide-react";
+import { Moon, Sun, LogOut, Mail, Search, WifiOff } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
 import { Button } from "@/components/ui/Button";
 
 export function Header() {
   const authEmail = useAppStore((s) => s.authEmail);
+  const syncError = useAppStore((s) => s.syncError);
   const darkMode = useAppStore((s) => s.darkMode);
   const toggleDarkMode = useAppStore((s) => s.toggleDarkMode);
   const searchEmails = useAppStore((s) => s.searchEmails);
@@ -46,6 +47,14 @@ export function Header() {
       </form>
 
       <div className="flex items-center gap-2">
+        {syncError && (
+          <span
+            title={syncError}
+            className="flex items-center gap-1 rounded-full bg-warm-soft px-2 py-1 text-[11px] font-medium text-warm"
+          >
+            <WifiOff className="h-3 w-3" /> <span className="hidden md:inline">Live updates paused</span>
+          </span>
+        )}
         <Button variant="ghost" size="sm" aria-label="Toggle dark mode" onClick={toggleDarkMode}>
           {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
