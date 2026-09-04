@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log-safe";
 import { notifyPossibleNewMail } from "@/lib/sync/event-bus";
 
 interface PubSubPushBody {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       notifyPossibleNewMail(parsed.emailAddress);
     }
   } catch (err) {
-    console.error("[webhooks/gmail-pubsub] failed to parse push payload:", err);
+    logError("[webhooks/gmail-pubsub] failed to parse push payload:", err);
     // Still ack — a malformed payload will never succeed on retry either.
   }
 

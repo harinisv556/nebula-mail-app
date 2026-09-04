@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AuthRequiredError } from "@/lib/auth/session";
 import { MailServiceError } from "@/lib/mail/mail-service";
+import { logError } from "@/lib/log-safe";
 
 /**
  * Central error -> HTTP response mapping for API routes. Keeps the message
@@ -21,7 +22,7 @@ export function toErrorResponse(err: unknown): NextResponse {
   }
 
   if (err instanceof MailServiceError) {
-    console.error(`[mail] ${err.code}: ${err.message}`, err.cause ? { cause: safeCause(err.cause) } : undefined);
+    logError(`[mail] ${err.code}:`, err.cause ?? err.message);
     const status = { AUTH_EXPIRED: 401, NOT_FOUND: 404, INVALID_INPUT: 400, NETWORK_ERROR: 502, PROVIDER_ERROR: 502 }[err.code];
     const message = {
       AUTH_EXPIRED: "Your Google session has expired. Please sign in again.",
@@ -41,12 +42,6 @@ export function toErrorResponse(err: unknown): NextResponse {
     );
   }
 
-  console.error("[api] unhandled error:", err instanceof Error ? err.stack ?? err.message : err);
+  logError("[api] unhandled error:", err);
   return NextResponse.json({ error: "internal_error", message: "Something went wrong. Please try again." }, { status: 500 });
-}
-
-/** Strips anything that could look like a token/secret before logging a wrapped provider error. */
-function safeCause(cause: unknown): string {
-  const text = cause instanceof Error ? cause.message : String(cause);
-  return text.replace(/(access_token|refresh_token|authorization)["':\s=]+[^\s&"]+/gi, "$1=[redacted]");
 }

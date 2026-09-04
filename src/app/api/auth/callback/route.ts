@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { authorizedClient, exchangeCodeForTokens } from "@/lib/auth/google";
 import { getSession } from "@/lib/auth/session";
+import { logError } from "@/lib/log-safe";
 
 function redirectWithError(request: NextRequest, message: string) {
   const url = new URL("/", request.url);
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(new URL("/", request.url));
   } catch (err) {
-    console.error("[auth/callback] token exchange failed:", err instanceof Error ? err.message : err);
+    logError("[auth/callback] token exchange failed:", err);
     return redirectWithError(request, "Failed to complete Google sign-in. Please try again.");
   }
 }

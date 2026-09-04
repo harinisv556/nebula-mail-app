@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth/session";
+import { logError } from "@/lib/log-safe";
 import { GmailMailService } from "@/lib/mail/gmail-service";
 import { MailServiceError } from "@/lib/mail/mail-service";
 import { onWake } from "@/lib/sync/event-bus";
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
   try {
     cursorHistoryId = await service.getCurrentHistoryId();
   } catch (err) {
-    console.error("[sync/stream] failed to establish starting historyId:", err);
+    logError("[sync/stream] failed to establish starting historyId:", err);
     return new Response("Failed to start sync", { status: 502 });
   }
 
@@ -76,11 +77,11 @@ export async function GET(request: Request) {
             try {
               cursorHistoryId = await service.getCurrentHistoryId();
             } catch (resyncErr) {
-              console.error("[sync/stream] resync failed:", resyncErr);
+              logError("[sync/stream] resync failed:", resyncErr);
             }
             return;
           }
-          console.error("[sync/stream] poll failed:", err);
+          logError("[sync/stream] poll failed:", err);
           send("sync_error", { message: "Temporarily unable to check for new mail." });
         }
       };
