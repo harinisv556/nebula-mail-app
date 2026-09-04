@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AppView, UIContext } from "@/lib/types/context";
 import { DEFAULT_FILTERS, EMPTY_DRAFT, type ComposeDraft, type Email, type EmailFilters, type EmailSummary, type MailFolder } from "@/lib/types/mail";
 import { buildForwardDraft, buildReplyDraft } from "@/lib/mail/compose-helpers";
+import { SEND_CONFIRMATION_TTL_MS, hashEmailPayload } from "@/lib/mail/canonical-payload";
 
 /**
  * The shared application action layer (PDF Phase 5 / brief Phase 5).
@@ -57,6 +58,9 @@ interface AppState {
   composeOpen: boolean;
   composeDraft: ComposeDraft;
   pendingConfirmation: ComposeDraft | null;
+  /** Hash of `pendingConfirmation`'s content and its expiry — see canonical-payload.ts. Kept alongside, not inside, `pendingConfirmation` so existing truthy checks (`pendingConfirmation &&`) keep working unchanged. */
+  pendingConfirmationHash: string | null;
+  pendingConfirmationExpiresAt: number | null;
   sendStatus: SendStatus;
   sendError: string | null;
 
@@ -84,7 +88,7 @@ interface AppState {
   closeEmail: () => void;
   prepareReply: (emailId: string, draftBody?: string) => Promise<void>;
   prepareForward: (emailId: string, to?: string[], draftBody?: string) => Promise<void>;
-  requestSendConfirmation: (draft: ComposeDraft) => void;
+  requestSendConfirmation: (draft: ComposeDraft) => Promise<void>;
   confirmSend: () => Promise<void>;
   cancelSendConfirmation: () => void;
   sendEmail: (draft: ComposeDraft) => Promise<void>;
@@ -146,6 +150,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   composeOpen: false,
   composeDraft: EMPTY_DRAFT,
   pendingConfirmation: null,
+  pendingConfirmationHash: null,
+  pendingConfirmationExpiresAt: null,
   sendStatus: "idle",
   sendError: null,
 
@@ -176,6 +182,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       composeOpen: false,
       composeDraft: EMPTY_DRAFT,
       pendingConfirmation: null,
+      pendingConfirmationHash: null,
+      pendingConfirmationExpiresAt: null,
       sendStatus: "idle",
       sendError: null,
       currentView: s.openEmail ? "email_detail" : s.currentFolder === "sent" ? "sent" : "inbox",
@@ -257,15 +265,47 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ currentView: "compose", composeOpen: true, composeDraft: draft, sendStatus: "idle", sendError: null });
   },
 
-  requestSendConfirmation: (draft) =>
-    set({ currentView: "compose", composeOpen: true, composeDraft: draft, pendingConfirmation: draft, sendStatus: "idle", sendError: null }),
+  requestSendConfirmation: async (draft) => {
+    // Hashing is computed from the exact draft being shown to the user right
+    // now — this is the value validate-action.ts will later compare a
+    // SEND_EMAIL action's payload against, so it must be bound at the moment
+    // of display, not reconstructed later from possibly-different state.
+    const payloadHash = await hashEmailPayload(draft);
+    set({
+      currentView: "compose",
+      composeOpen: true,
+      composeDraft: draft,
+      pendingConfirmation: draft,
+      pendingConfirmationHash: payloadHash,
+      pendingConfirmationExpiresAt: Date.now() + SEND_CONFIRMATION_TTL_MS,
+      sendStatus: "idle",
+      sendError: null,
+    });
+  },
 
-  cancelSendConfirmation: () => set({ pendingConfirmation: null }),
+  cancelSendConfirmation: () => set({ pendingConfirmation: null, pendingConfirmationHash: null, pendingConfirmationExpiresAt: null }),
 
   confirmSend: async () => {
-    const draft = get().pendingConfirmation;
-    if (!draft) return;
-    set({ pendingConfirmation: null });
+    const { pendingConfirmation, pendingConfirmationExpiresAt } = get();
+    if (!pendingConfirmation) return;
+
+    if (pendingConfirmationExpiresAt !== null && Date.now() > pendingConfirmationExpiresAt) {
+      // Mirrors the server-side expiry check in validate-action.ts, applied
+      // here too so a stale "Yes, send" click (e.g. a tab left open) doesn't
+      // fire off an email the user approved a long time ago without looking
+      // at it again.
+      set({
+        pendingConfirmation: null,
+        pendingConfirmationHash: null,
+        pendingConfirmationExpiresAt: null,
+        sendStatus: "error",
+        sendError: "This confirmation expired. Please review and send again.",
+      });
+      return;
+    }
+
+    const draft = pendingConfirmation;
+    set({ pendingConfirmation: null, pendingConfirmationHash: null, pendingConfirmationExpiresAt: null });
     await get().sendEmail(draft);
   },
 
@@ -277,7 +317,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      set({ sendStatus: "sent", composeOpen: false, composeDraft: EMPTY_DRAFT, pendingConfirmation: null });
+      set({
+        sendStatus: "sent",
+        composeOpen: false,
+        composeDraft: EMPTY_DRAFT,
+        pendingConfirmation: null,
+        pendingConfirmationHash: null,
+        pendingConfirmationExpiresAt: null,
+      });
       if (get().currentFolder === "sent") await get().refreshCurrentList();
     } catch (err) {
       set({ sendStatus: "error", sendError: err instanceof Error ? err.message : "Failed to send email." });
@@ -310,7 +357,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? { to: s.composeDraft.to, subject: s.composeDraft.subject, hasBody: s.composeDraft.body.trim().length > 0 }
         : undefined,
       visibleEmailIds: s.emails.map((e) => e.id),
-      sendConfirmationPending: s.pendingConfirmation !== null,
+      pendingSendConfirmation:
+        s.pendingConfirmation !== null && s.pendingConfirmationHash !== null && s.pendingConfirmationExpiresAt !== null
+          ? { payloadHash: s.pendingConfirmationHash, expiresAt: s.pendingConfirmationExpiresAt }
+          : null,
     };
   },
 }));

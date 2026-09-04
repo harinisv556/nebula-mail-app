@@ -119,6 +119,7 @@ export const DEFAULT_FILTERS: EmailFilters = {
 export interface ComposeDraft {
   to: string[];
   cc?: string[];
+  bcc?: string[];
   subject: string;
   body: string;
   /** Set when composing a reply — the message being replied to. */

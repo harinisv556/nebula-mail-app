@@ -100,13 +100,22 @@ export const PrepareForwardActionSchema = z.object({
   }),
 });
 
+// `bcc`/`threadId`/`inReplyTo` are accepted (and folded into the send-
+// confirmation hash — see canonical-payload.ts) so a reply/forward's
+// threading is preserved if a caller does supply it, but they are NOT yet
+// exposed on the assistant's tool input_schema (see tools.ts) — the model
+// cannot set them via natural language today. That's a deliberate scoping
+// choice, not an oversight: see README "Known limitations".
 export const RequestSendConfirmationActionSchema = z.object({
   type: z.literal("REQUEST_SEND_CONFIRMATION"),
   payload: z.object({
     to: z.array(emailAddress).min(1),
     cc: z.array(emailAddress).optional(),
+    bcc: z.array(emailAddress).optional(),
     subject: z.string().min(1).max(998),
     body: z.string().min(1),
+    threadId: z.string().optional(),
+    inReplyTo: z.string().optional(),
   }),
 });
 
@@ -115,8 +124,11 @@ export const SendEmailActionSchema = z.object({
   payload: z.object({
     to: z.array(emailAddress).min(1),
     cc: z.array(emailAddress).optional(),
+    bcc: z.array(emailAddress).optional(),
     subject: z.string().min(1).max(998),
     body: z.string().min(1),
+    threadId: z.string().optional(),
+    inReplyTo: z.string().optional(),
   }),
 });
 

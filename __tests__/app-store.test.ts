@@ -138,29 +138,66 @@ describe("app-store — open email / reply (application action layer)", () => {
     expect(useAppStore.getState().composeDraft.to).toEqual(["david@example.com"]);
     expect(useAppStore.getState().composeDraft.subject).toBe("Re: Status");
   });
+
+  it("prepareForward reuses the already-open email, fills the given recipient, and prefixes the subject with Fwd:", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    useAppStore.setState({ openEmail: fullEmail });
+
+    await useAppStore.getState().prepareForward("e1", ["colleague@example.com"], "FYI");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(useAppStore.getState().composeOpen).toBe(true);
+    expect(useAppStore.getState().composeDraft.to).toEqual(["colleague@example.com"]);
+    expect(useAppStore.getState().composeDraft.subject).toBe("Fwd: Status");
+    expect(useAppStore.getState().composeDraft.body).toContain("FYI");
+    expect(useAppStore.getState().composeDraft.body).toContain("Forwarded message");
+  });
+
+  it("prepareForward fetches the email first when it isn't the one currently open", async () => {
+    const otherEmail = { ...fullEmail, id: "e2", subject: "Other subject" };
+    vi.stubGlobal("fetch", mockFetchOnce({ email: otherEmail }));
+    useAppStore.setState({ openEmail: null });
+
+    await useAppStore.getState().prepareForward("e2");
+
+    expect(useAppStore.getState().composeDraft.subject).toBe("Fwd: Other subject");
+  });
 });
 
 describe("app-store — send confirmation gating", () => {
-  it("requestSendConfirmation does not send the email", () => {
+  it("requestSendConfirmation does not send the email", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const draft = { to: ["john@example.com"], subject: "Hi", body: "Hello" };
 
-    useAppStore.getState().requestSendConfirmation(draft);
+    await useAppStore.getState().requestSendConfirmation(draft);
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(useAppStore.getState().pendingConfirmation).toEqual(draft);
     expect(useAppStore.getState().composeOpen).toBe(true);
   });
 
-  it("cancelSendConfirmation clears the pending draft without sending", () => {
+  it("requestSendConfirmation binds a payload hash and an expiry to the pending confirmation", async () => {
+    const draft = { to: ["john@example.com"], subject: "Hi", body: "Hello" };
+    await useAppStore.getState().requestSendConfirmation(draft);
+
+    const s = useAppStore.getState();
+    expect(s.pendingConfirmationHash).toBeTruthy();
+    expect(s.pendingConfirmationExpiresAt).toBeGreaterThan(Date.now());
+    expect(s.getUIContext().pendingSendConfirmation).toEqual({ payloadHash: s.pendingConfirmationHash, expiresAt: s.pendingConfirmationExpiresAt });
+  });
+
+  it("cancelSendConfirmation clears the pending draft without sending", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    useAppStore.getState().requestSendConfirmation({ to: ["a@example.com"], subject: "s", body: "b" });
+    await useAppStore.getState().requestSendConfirmation({ to: ["a@example.com"], subject: "s", body: "b" });
 
     useAppStore.getState().cancelSendConfirmation();
 
     expect(useAppStore.getState().pendingConfirmation).toBeNull();
+    expect(useAppStore.getState().pendingConfirmationHash).toBeNull();
+    expect(useAppStore.getState().pendingConfirmationExpiresAt).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -168,12 +205,30 @@ describe("app-store — send confirmation gating", () => {
     const fetchMock = mockFetchOnce({ ok: true, id: "sent1", threadId: "t1" });
     vi.stubGlobal("fetch", fetchMock);
     const draft = { to: ["john@example.com"], subject: "Hi", body: "Hello" };
-    useAppStore.getState().requestSendConfirmation(draft);
+    await useAppStore.getState().requestSendConfirmation(draft);
 
     await useAppStore.getState().confirmSend();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/mail/send", expect.objectContaining({ method: "POST" }));
     expect(useAppStore.getState().pendingConfirmation).toBeNull();
+    expect(useAppStore.getState().pendingConfirmationHash).toBeNull();
+    expect(useAppStore.getState().pendingConfirmationExpiresAt).toBeNull();
     expect(useAppStore.getState().sendStatus).toBe("sent");
+  });
+
+  it("confirmSend refuses to send an expired confirmation and surfaces an error instead", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const draft = { to: ["john@example.com"], subject: "Hi", body: "Hello" };
+    await useAppStore.getState().requestSendConfirmation(draft);
+    // Simulate time having passed past the TTL without relying on fake timers.
+    useAppStore.setState({ pendingConfirmationExpiresAt: Date.now() - 1000 });
+
+    await useAppStore.getState().confirmSend();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(useAppStore.getState().pendingConfirmation).toBeNull();
+    expect(useAppStore.getState().sendStatus).toBe("error");
+    expect(useAppStore.getState().sendError).toMatch(/expired/i);
   });
 });

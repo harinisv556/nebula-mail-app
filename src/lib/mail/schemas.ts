@@ -15,6 +15,7 @@ export const EmailFiltersSchema = z.object({
 export const ComposeDraftSchema = z.object({
   to: z.array(z.string().email()).min(1, "At least one recipient is required."),
   cc: z.array(z.string().email()).optional(),
+  bcc: z.array(z.string().email()).optional(),
   subject: z.string().trim().min(1, "Subject cannot be empty.").max(998),
   body: z.string().trim().min(1, "Body cannot be empty."),
   inReplyTo: z.string().optional(),

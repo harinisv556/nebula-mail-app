@@ -185,6 +185,12 @@ export class GmailMailService implements MailService {
 }
 
 function toMailServiceError(err: unknown, message: string): MailServiceError {
+  // Don't re-classify an error we already deliberately threw as
+  // MailServiceError (e.g. "provider response was missing an expected
+  // field") — it has no `.response.status`, so re-running it through the
+  // gaxios-status inference below would silently relabel it NETWORK_ERROR.
+  if (err instanceof MailServiceError) return err;
+
   const gaxiosErr = err as GaxiosError;
   const status = gaxiosErr?.response?.status;
   if (status === 401) return new MailServiceError(`${message}: authentication expired`, "AUTH_EXPIRED", err);
@@ -194,16 +200,18 @@ function toMailServiceError(err: unknown, message: string): MailServiceError {
   return new MailServiceError(message, "PROVIDER_ERROR", err);
 }
 
-function encodeHeaderValue(value: string): string {
+export function encodeHeaderValue(value: string): string {
   // Encode non-ASCII subject/name text per RFC 2047 so Gmail renders it correctly.
   if (/^[\x00-\x7F]*$/.test(value)) return value;
   return `=?UTF-8?B?${Buffer.from(value, "utf-8").toString("base64")}?=`;
 }
 
-function buildRawMessage(draft: ComposeDraft): string {
+/** Exported for direct unit testing — see __tests__/gmail-service.test.ts. */
+export function buildRawMessage(draft: ComposeDraft): string {
   const headers = [
     `To: ${draft.to.join(", ")}`,
     draft.cc?.length ? `Cc: ${draft.cc.join(", ")}` : undefined,
+    draft.bcc?.length ? `Bcc: ${draft.bcc.join(", ")}` : undefined,
     `Subject: ${encodeHeaderValue(draft.subject)}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',

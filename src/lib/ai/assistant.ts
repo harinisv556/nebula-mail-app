@@ -145,7 +145,7 @@ export async function runAssistant(
 
     for (const toolUse of toolUses) {
       const isGrounding = toolUse.name === "SEARCH_EMAILS" || toolUse.name === "FILTER_EMAILS";
-      const validation = validateAction(toolUse.name, toolUse.input, context);
+      const validation = await validateAction(toolUse.name, toolUse.input, context);
 
       if (!validation.ok) {
         rejections.push({ type: toolUse.name, reason: validation.reason });

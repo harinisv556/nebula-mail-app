@@ -53,11 +53,27 @@ export async function dispatchAction(action: AppAction): Promise<void> {
       return;
 
     case "REQUEST_SEND_CONFIRMATION":
-      store.requestSendConfirmation({ to: action.payload.to, cc: action.payload.cc, subject: action.payload.subject, body: action.payload.body });
+      await store.requestSendConfirmation({
+        to: action.payload.to,
+        cc: action.payload.cc,
+        bcc: action.payload.bcc,
+        subject: action.payload.subject,
+        body: action.payload.body,
+        threadId: action.payload.threadId,
+        inReplyTo: action.payload.inReplyTo,
+      });
       return;
 
     case "SEND_EMAIL":
-      await store.sendEmail({ to: action.payload.to, cc: action.payload.cc, subject: action.payload.subject, body: action.payload.body });
+      await store.sendEmail({
+        to: action.payload.to,
+        cc: action.payload.cc,
+        bcc: action.payload.bcc,
+        subject: action.payload.subject,
+        body: action.payload.body,
+        threadId: action.payload.threadId,
+        inReplyTo: action.payload.inReplyTo,
+      });
       return;
   }
 }

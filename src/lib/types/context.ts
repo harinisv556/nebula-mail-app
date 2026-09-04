@@ -32,10 +32,13 @@ export interface UIContext {
   /** IDs of emails currently visible in the main list, for "reply to the second one" style follow-ups. */
   visibleEmailIds: string[];
   /**
-   * True only immediately after the assistant issued REQUEST_SEND_CONFIRMATION
-   * and is awaiting the user's yes/no. The server-side action validator uses
-   * this — not the model's own claim — to decide whether a SEND_EMAIL action
-   * is allowed through. See src/lib/ai/validate-action.ts.
+   * Set only immediately after the assistant issued REQUEST_SEND_CONFIRMATION
+   * and the user hasn't yet acted on it. Carries a hash of the exact payload
+   * that was shown to the user (see src/lib/mail/canonical-payload.ts) and an
+   * expiry timestamp — the server-side action validator uses this binding
+   * (not just presence, and not the model's own claim) to decide whether a
+   * later SEND_EMAIL action may proceed: it must match the approved payload
+   * exactly and must not have expired. See src/lib/ai/validate-action.ts.
    */
-  sendConfirmationPending: boolean;
+  pendingSendConfirmation: { payloadHash: string; expiresAt: number } | null;
 }

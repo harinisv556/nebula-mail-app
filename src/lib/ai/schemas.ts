@@ -29,7 +29,7 @@ export const UIContextSchema = z.object({
     .optional(),
   composeDraft: z.object({ to: z.array(z.string()), subject: z.string(), hasBody: z.boolean() }).optional(),
   visibleEmailIds: z.array(z.string()),
-  sendConfirmationPending: z.boolean(),
+  pendingSendConfirmation: z.object({ payloadHash: z.string(), expiresAt: z.number() }).nullable(),
 });
 
 export const AssistantRequestSchema = z.object({

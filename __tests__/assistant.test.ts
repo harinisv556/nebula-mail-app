@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { runAssistant, type AnthropicMessagesClient } from "@/lib/ai/assistant";
+import { hashEmailPayload } from "@/lib/mail/canonical-payload";
 import type { UIContext } from "@/lib/types/context";
 import type { MailService } from "@/lib/mail/mail-service";
 import type { EmailSummary } from "@/lib/types/mail";
@@ -10,7 +11,7 @@ const baseContext: UIContext = {
   currentFolder: "inbox",
   currentFilters: { folder: "inbox" },
   visibleEmailIds: [],
-  sendConfirmationPending: false,
+  pendingSendConfirmation: null,
 };
 
 function textMessage(text: string): Anthropic.Message {
@@ -173,13 +174,31 @@ describe("runAssistant — send confirmation gating", () => {
     expect(result.rejections.length).toBeGreaterThan(0);
   });
 
-  it("allows SEND_EMAIL once the context shows a confirmation is pending", async () => {
+  it("allows SEND_EMAIL once the context shows a confirmation is pending for that exact payload", async () => {
     const payload = { to: ["john@example.com"], subject: "Hi", body: "Hello" };
     const client = fakeClient([toolUseMessage("SEND_EMAIL", payload)]);
-    const result = await runAssistant("Yes, send it", { ...baseContext, sendConfirmationPending: true }, [], fakeMailService(), client);
+    const context: UIContext = {
+      ...baseContext,
+      pendingSendConfirmation: { payloadHash: await hashEmailPayload(payload), expiresAt: Date.now() + 60_000 },
+    };
+    const result = await runAssistant("Yes, send it", context, [], fakeMailService(), client);
 
     expect(result.actions[0].type).toBe("SEND_EMAIL");
     expect(result.rejections).toHaveLength(0);
+  });
+
+  it("still rejects SEND_EMAIL if a confirmation is pending but for a different payload", async () => {
+    const approved = { to: ["john@example.com"], subject: "Hi", body: "Hello" };
+    const attempted = { to: ["someone-else@example.com"], subject: "Hi", body: "Hello" };
+    const client = fakeClient([toolUseMessage("SEND_EMAIL", attempted)]);
+    const context: UIContext = {
+      ...baseContext,
+      pendingSendConfirmation: { payloadHash: await hashEmailPayload(approved), expiresAt: Date.now() + 60_000 },
+    };
+    const result = await runAssistant("Yes, send it", context, [], fakeMailService(), client);
+
+    expect(result.actions[0].type).toBe("REQUEST_SEND_CONFIRMATION");
+    expect(result.rejections.length).toBeGreaterThan(0);
   });
 });
 
