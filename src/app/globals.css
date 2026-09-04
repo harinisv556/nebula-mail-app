@@ -1,26 +1,135 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f5f2;
+  --surface: #ffffff;
+  --surface-2: #efeee8;
+  --border: #e2e0d8;
+  --foreground: #1d1c1a;
+  --muted: #6f6c64;
+  --accent: #35507a;
+  --accent-foreground: #ffffff;
+  --accent-soft: #e8edf5;
+  --warm: #c8663f;
+  --warm-soft: #f6e6de;
+  --success: #2f8a4e;
+  --success-soft: #e3f3e8;
+  --danger: #b3401f;
+  --danger-soft: #f8e4dc;
+  --ring: #35507a;
+}
+
+:root[data-theme="dark"] {
+  --background: #14161b;
+  --surface: #1b1e25;
+  --surface-2: #23262f;
+  --border: #303442;
+  --foreground: #eceae4;
+  --muted: #9d9a92;
+  --accent: #7c9cc9;
+  --accent-foreground: #101823;
+  --accent-soft: #202b3b;
+  --warm: #e08a67;
+  --warm-soft: #35271f;
+  --success: #63c281;
+  --success-soft: #16261c;
+  --danger: #e08469;
+  --danger-soft: #2e1c17;
+  --ring: #7c9cc9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #14161b;
+    --surface: #1b1e25;
+    --surface-2: #23262f;
+    --border: #303442;
+    --foreground: #eceae4;
+    --muted: #9d9a92;
+    --accent: #7c9cc9;
+    --accent-foreground: #101823;
+    --accent-soft: #202b3b;
+    --warm: #e08a67;
+    --warm-soft: #35271f;
+    --success: #63c281;
+    --success-soft: #16261c;
+    --danger: #e08469;
+    --danger-soft: #2e1c17;
+    --ring: #7c9cc9;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-warm: var(--warm);
+  --color-warm-soft: var(--warm-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Thin, unobtrusive scrollbars that still respect the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.1s ease-in-out infinite;
 }
