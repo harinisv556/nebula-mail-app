@@ -89,17 +89,27 @@ async function executeGrounding(action: Extract<AppAction, { type: "SEARCH_EMAIL
   };
 }
 
+/** Minimal shape we depend on from the Anthropic SDK — lets tests inject a fake client without hitting the network. */
+export interface AnthropicMessagesClient {
+  messages: {
+    create(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message>;
+  };
+}
+
 export async function runAssistant(
   userMessage: string,
   context: UIContext,
   history: AssistantTurn[],
   mailService: MailService,
+  client?: AnthropicMessagesClient,
 ): Promise<AssistantResponse> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured. Add it to .env.local to enable the assistant.");
+  if (!client) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error("ANTHROPIC_API_KEY is not configured. Add it to .env.local to enable the assistant.");
+    }
+    client = new Anthropic({ apiKey });
   }
-  const client = new Anthropic({ apiKey });
 
   const messages: Anthropic.MessageParam[] = [
     ...history.map((h): Anthropic.MessageParam => ({ role: h.role, content: h.text })),
