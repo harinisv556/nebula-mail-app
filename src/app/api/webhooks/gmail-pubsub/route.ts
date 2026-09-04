@@ -17,10 +17,30 @@ interface PubSubPushBody {
  * that user's own credentials. This keeps Gmail tokens out of the webhook
  * entirely and means a misconfigured/spoofed webhook call can, at worst,
  * trigger a spurious (harmless, read-only) history check.
+ *
+ * Verification: requires GMAIL_PUBSUB_VERIFICATION_TOKEN as a `?token=`
+ * query param match. In production, a missing token is a hard failure
+ * (503) — this endpoint will never silently accept unauthenticated
+ * requests in prod. Outside production, a missing token is allowed (for
+ * local dev without the optional Pub/Sub setup) but logged.
  */
 export async function POST(request: NextRequest) {
   const expectedToken = process.env.GMAIL_PUBSUB_VERIFICATION_TOKEN;
-  if (expectedToken) {
+
+  if (!expectedToken) {
+    if (process.env.NODE_ENV === "production") {
+      // Refuse to run unauthenticated in production rather than silently
+      // accepting any POST — a missing token here is a deployment
+      // misconfiguration, not a valid "verification disabled" state.
+      console.error("[webhooks/gmail-pubsub] rejected: GMAIL_PUBSUB_VERIFICATION_TOKEN is not configured in production");
+      return NextResponse.json(
+        { error: "misconfigured", message: "GMAIL_PUBSUB_VERIFICATION_TOKEN must be set in production." },
+        { status: 503 },
+      );
+    }
+    // Dev/test convenience only, and still logged so it's not silently insecure locally either.
+    console.warn("[webhooks/gmail-pubsub] GMAIL_PUBSUB_VERIFICATION_TOKEN is not set — accepting unverified requests (non-production only).");
+  } else {
     const token = request.nextUrl.searchParams.get("token");
     if (token !== expectedToken) {
       console.warn("[webhooks/gmail-pubsub] rejected request with invalid verification token");
