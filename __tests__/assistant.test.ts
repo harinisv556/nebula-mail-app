@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { runAssistant, type AnthropicMessagesClient } from "@/lib/ai/assistant";
+import { OllamaMessagesClient } from "@/lib/ai/ollama-client";
 import { hashEmailPayload } from "@/lib/mail/canonical-payload";
 import type { UIContext } from "@/lib/types/context";
 import type { MailService } from "@/lib/mail/mail-service";
@@ -215,5 +216,77 @@ describe("runAssistant — invalid/unsupported commands", () => {
     const result = await runAssistant("compose something", baseContext, [], fakeMailService(), client);
     expect(result.actions).toHaveLength(0);
     expect(result.rejections.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * These tests drive the exact same runAssistant() loop through a *real*
+ * OllamaMessagesClient instance (fetch mocked, no real network / no real
+ * Ollama server) instead of the plain fakeClient() used above. The point is
+ * to prove that validateAction()'s security rules and the confirmation-hash
+ * gate are enforced identically when the tool_use block arrives via the
+ * Ollama response-translation path, not just when constructed directly in a
+ * test fixture. This is still a MOCKED test, not a real-Ollama test — see
+ * the manual verification steps in README for that distinction.
+ */
+describe("runAssistant — via OllamaMessagesClient (mocked fetch, same validation/dispatch path)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubOllamaResponse(message: { role: string; content?: string; tool_calls?: { function: { name: string; arguments: unknown } }[] }) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ message }),
+        text: async () => "",
+      })),
+    );
+  }
+
+  function ollamaClient(): AnthropicMessagesClient {
+    return new OllamaMessagesClient({ baseUrl: "http://localhost:11434", model: "qwen2.5:7b" });
+  }
+
+  it("rejects an invalid tool payload from Ollama via the existing action validator, same as the Anthropic path", async () => {
+    stubOllamaResponse({
+      role: "assistant",
+      content: "",
+      tool_calls: [{ function: { name: "FILL_COMPOSE", arguments: { to: ["not-an-email"], subject: "Hi" } } }],
+    });
+    const result = await runAssistant("compose something", baseContext, [], fakeMailService(), ollamaClient());
+    expect(result.actions).toHaveLength(0);
+    expect(result.rejections.length).toBeGreaterThan(0);
+  });
+
+  it("still downgrades an unconfirmed SEND_EMAIL to a confirmation request when routed through Ollama", async () => {
+    stubOllamaResponse({
+      role: "assistant",
+      content: "",
+      tool_calls: [{ function: { name: "SEND_EMAIL", arguments: { to: ["john@example.com"], subject: "Hi", body: "Hello" } } }],
+    });
+    const result = await runAssistant("send an email to john saying hello", baseContext, [], fakeMailService(), ollamaClient());
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0].type).toBe("REQUEST_SEND_CONFIRMATION");
+    expect(result.rejections.length).toBeGreaterThan(0);
+  });
+
+  it("allows SEND_EMAIL via Ollama once the exact-payload confirmation hash matches", async () => {
+    const payload = { to: ["john@example.com"], subject: "Hi", body: "Hello" };
+    stubOllamaResponse({ role: "assistant", content: "", tool_calls: [{ function: { name: "SEND_EMAIL", arguments: payload } }] });
+    const context: UIContext = {
+      ...baseContext,
+      pendingSendConfirmation: { payloadHash: await hashEmailPayload(payload), expiresAt: Date.now() + 60_000 },
+    };
+    const result = await runAssistant("yes, send it", context, [], fakeMailService(), ollamaClient());
+    expect(result.actions[0].type).toBe("SEND_EMAIL");
+    expect(result.rejections).toHaveLength(0);
+  });
+
+  it("translates a plain-text (no tool call) Ollama reply into a text-only response, same as Anthropic", async () => {
+    stubOllamaResponse({ role: "assistant", content: "I'm not sure what you'd like me to do." });
+    const result = await runAssistant("asdkjfhaskjdfh", baseContext, [], fakeMailService(), ollamaClient());
+    expect(result.actions).toHaveLength(0);
+    expect(result.reply).toMatch(/not sure/i);
   });
 });
