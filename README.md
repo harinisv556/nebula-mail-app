@@ -177,7 +177,7 @@ Open [http://localhost:3000](http://localhost:3000), sign in with Google, and gr
 npm test
 ```
 
-53 tests across mail query building, Gmail message normalization, reply/forward draft construction, the AI action validator (including the send-confirmation gate), the assistant orchestration loop (compose/search/filter/navigate/open-email/reply intents, invalid input), and the application action layer itself (the Zustand store).
+116 tests across 11 files: mail query building, Gmail message normalization, `GmailMailService` (list/get/send/watch/history, token-refresh capture), `buildRawMessage` (RFC 2822 raw message construction), reply/forward draft construction, the AI action validator (including the send-confirmation gate), the assistant orchestration loop (compose/search/filter/navigate/open-email/reply intents, invalid input), the application action layer itself (the Zustand store), the Gmail Pub/Sub webhook (token verification in prod/dev), the SSE sync stream route, and the realtime-sync event listeners.
 
 ## AI assistant architecture
 
