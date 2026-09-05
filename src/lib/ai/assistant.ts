@@ -1,10 +1,14 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { MailService } from "@/lib/mail/mail-service";
 import type { UIContext } from "@/lib/types/context";
 import type { AppAction } from "@/lib/types/actions";
 import { ASSISTANT_TOOLS } from "./tools";
 import { validateAction } from "./validate-action";
 import { filtersForAction } from "./action-to-filters";
+import { getDefaultAssistantClient } from "./provider";
+import type { AnthropicMessagesClient } from "./client-types";
+
+export type { AnthropicMessagesClient } from "./client-types";
 
 const MAX_AGENT_TURNS = 4;
 const GROUNDING_RESULT_LIMIT = 10;
@@ -89,13 +93,6 @@ async function executeGrounding(action: Extract<AppAction, { type: "SEARCH_EMAIL
   };
 }
 
-/** Minimal shape we depend on from the Anthropic SDK — lets tests inject a fake client without hitting the network. */
-export interface AnthropicMessagesClient {
-  messages: {
-    create(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message>;
-  };
-}
-
 export async function runAssistant(
   userMessage: string,
   context: UIContext,
@@ -104,11 +101,11 @@ export async function runAssistant(
   client?: AnthropicMessagesClient,
 ): Promise<AssistantResponse> {
   if (!client) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY is not configured. Add it to .env.local to enable the assistant.");
-    }
-    client = new Anthropic({ apiKey });
+    // Provider selection (Anthropic in production, always; optionally Ollama
+    // in local dev via AI_PROVIDER=ollama) lives entirely in provider.ts —
+    // see src/lib/ai/provider.ts. Everything below this line is identical
+    // regardless of which client this resolves to.
+    client = getDefaultAssistantClient();
   }
 
   const messages: Anthropic.MessageParam[] = [

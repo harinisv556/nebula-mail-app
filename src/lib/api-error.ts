@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AuthRequiredError } from "@/lib/auth/session";
 import { MailServiceError } from "@/lib/mail/mail-service";
+import { OllamaUnavailableError } from "@/lib/ai/ollama-client";
 import { logError } from "@/lib/log-safe";
 
 /**
@@ -40,6 +41,18 @@ export function toErrorResponse(err: unknown): NextResponse {
       { error: "assistant_unconfigured", message: "The AI assistant isn't configured yet — missing ANTHROPIC_API_KEY on the server." },
       { status: 503 },
     );
+  }
+
+  if (err instanceof OllamaUnavailableError) {
+    // Dev-only local-provider path (see src/lib/ai/provider.ts) — never
+    // reachable in production, where the provider switch is forced off.
+    logError("[assistant] Ollama unavailable:", err);
+    return NextResponse.json({ error: "ollama_unavailable", message: err.message }, { status: 503 });
+  }
+
+  if (err instanceof Error && err.message.includes("OLLAMA_MODEL")) {
+    console.error("[assistant] AI_PROVIDER=ollama but OLLAMA_MODEL is not configured");
+    return NextResponse.json({ error: "assistant_unconfigured", message: err.message }, { status: 503 });
   }
 
   logError("[api] unhandled error:", err);
