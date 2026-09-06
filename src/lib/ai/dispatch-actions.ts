@@ -1,4 +1,5 @@
 import type { AppAction } from "@/lib/types/actions";
+import type { EmailFilters } from "@/lib/types/mail";
 import { useAppStore } from "@/lib/store/app-store";
 
 /**
@@ -34,15 +35,23 @@ export async function dispatchAction(action: AppAction): Promise<void> {
       await store.searchEmails(action.payload);
       return;
 
-    case "FILTER_EMAILS":
-      await store.applyEmailFilters({
-        folder: action.payload.folder,
-        unreadOnly: action.payload.unread,
-        dateRange: action.payload.dateRange,
-        sender: action.payload.sender,
-        keyword: action.payload.keyword,
-      });
+    case "FILTER_EMAILS": {
+      // Only pass through fields the model actually specified. FILTER_EMAILS's
+      // payload fields are all optional — if we always included every key
+      // (even as `undefined`), applyEmailFilters' object-spread merge would
+      // treat "key present with value undefined" as "clear this field",
+      // wiping out e.g. the current folder just because the model didn't
+      // mention it. Omitting unspecified keys entirely lets the store's
+      // merge fall through to the existing value instead. See __tests__/dispatch-actions.test.ts.
+      const patch: Partial<EmailFilters> = {};
+      if (action.payload.folder !== undefined) patch.folder = action.payload.folder;
+      if (action.payload.unread !== undefined) patch.unreadOnly = action.payload.unread;
+      if (action.payload.dateRange !== undefined) patch.dateRange = action.payload.dateRange;
+      if (action.payload.sender !== undefined) patch.sender = action.payload.sender;
+      if (action.payload.keyword !== undefined) patch.keyword = action.payload.keyword;
+      await store.applyEmailFilters(patch);
       return;
+    }
 
     case "PREPARE_REPLY":
       await store.prepareReply(action.payload.emailId, action.payload.draftBody);

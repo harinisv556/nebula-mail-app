@@ -113,9 +113,14 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-function filtersToQuery(filters: EmailFilters): string {
+/** Exported for direct unit testing — see __tests__/dispatch-actions.test.ts. */
+export function filtersToQuery(filters: EmailFilters): string {
   const params = new URLSearchParams();
-  params.set("folder", filters.folder);
+  // `folder` is typed as required, but a caller merging a partial patch could
+  // still produce `undefined` at runtime (URLSearchParams.set would silently
+  // stringify that to the literal "folder=undefined", which the server
+  // rejects) — fall back to "inbox" as a last-resort guard, not a normal path.
+  params.set("folder", filters.folder ?? "inbox");
   if (filters.keyword) params.set("keyword", filters.keyword);
   if (filters.sender) params.set("sender", filters.sender);
   if (filters.unreadOnly) params.set("unreadOnly", "true");
@@ -198,6 +203,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   applyEmailFilters: async (partial) => {
     const merged: EmailFilters = { ...get().filters, ...partial };
+    // A caller (e.g. the assistant's FILTER_EMAILS dispatch) is only expected
+    // to include the keys it actually wants to change — but if `folder` ever
+    // does come through as `undefined` (a bug elsewhere, or a future caller),
+    // fall back to the folder already in view rather than losing it. This
+    // never overrides an explicit folder — only patches a missing one.
+    if (!merged.folder) merged.folder = get().filters.folder;
     set({ filters: merged, currentFolder: merged.folder, currentView: merged.folder === "sent" ? "sent" : "inbox" });
     await get().refreshCurrentList();
   },

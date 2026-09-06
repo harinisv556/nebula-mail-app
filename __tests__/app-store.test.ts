@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAppStore } from "@/lib/store/app-store";
-import type { Email, EmailSummary } from "@/lib/types/mail";
+import { useAppStore, filtersToQuery } from "@/lib/store/app-store";
+import type { Email, EmailFilters, EmailSummary } from "@/lib/types/mail";
 
 const initialState = useAppStore.getState();
 
@@ -95,6 +95,37 @@ describe("app-store — filters (shared between UI controls and the assistant)",
     await useAppStore.getState().searchEmails({ keyword: "invoice" });
     expect(useAppStore.getState().filters.sender).toBeUndefined();
     expect(useAppStore.getState().filters.keyword).toBe("invoice");
+  });
+
+  it("applyEmailFilters never lets folder become falsy even if a caller's partial explicitly sets it undefined (regression)", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce({ emails: [] }));
+    useAppStore.setState({ filters: { folder: "sent" } });
+
+    // Simulates a caller that (incorrectly) includes an explicit `folder: undefined` key,
+    // the exact shape that caused the real folder=undefined bug found via live testing.
+    await useAppStore.getState().applyEmailFilters({ folder: undefined, unreadOnly: true });
+
+    expect(useAppStore.getState().filters.folder).toBe("sent");
+    expect(useAppStore.getState().currentFolder).toBe("sent");
+  });
+});
+
+describe("filtersToQuery — query serialization (regression: never emit a literal 'folder=undefined')", () => {
+  it("falls back to inbox rather than serializing an undefined folder literally", () => {
+    const corrupted = { folder: undefined } as unknown as EmailFilters;
+    const query = filtersToQuery(corrupted);
+    expect(query).not.toContain("undefined");
+    expect(query).toContain("folder=inbox");
+  });
+
+  it("serializes a real, non-default folder value as-is (never hardcodes inbox over an explicit folder)", () => {
+    const query = filtersToQuery({ folder: "sent" });
+    expect(query).toBe("folder=sent");
+  });
+
+  it("only includes optional filter fields that are actually set", () => {
+    const query = filtersToQuery({ folder: "inbox", unreadOnly: true, dateRange: "this_week" });
+    expect(query).toBe("folder=inbox&unreadOnly=true&dateRange=this_week");
   });
 });
 
