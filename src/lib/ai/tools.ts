@@ -34,7 +34,7 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   {
     name: "SEARCH_EMAILS",
     description:
-      "Search real emails by keyword, sender, and/or date range and show the results in the main inbox list. Call this whenever you need to find specific emails (e.g. 'the email from Sarah about the project update') or need real email IDs before calling OPEN_EMAIL or PREPARE_REPLY. Returns the matching emails so you can reason about them.",
+      "Search real emails by keyword, sender, and/or date range and show the results in the main inbox list. Call this whenever you need to find specific emails (e.g. 'the email from Sarah about the project update') or need real email IDs before calling OPEN_EMAIL or PREPARE_REPLY. Returns the matching emails so you can reason about them. Prefer this over FILTER_EMAILS whenever the goal is to find and then open one specific email.",
     input_schema: {
       type: "object",
       properties: {
@@ -48,7 +48,7 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   {
     name: "FILTER_EMAILS",
     description:
-      "Apply structured filters (unread status, date range, sender) to the main inbox/sent list. Use this for commands like 'show only unread emails from this week'. Returns the matching emails.",
+      "Apply structured filters (unread status, date range, sender) to the main inbox/sent list. Use this for commands like 'show only unread emails from this week'. Returns the matching emails. Not for opening a single specific email — use SEARCH_EMAILS followed by OPEN_EMAIL for that.",
     input_schema: {
       type: "object",
       properties: {
