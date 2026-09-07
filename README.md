@@ -195,12 +195,29 @@ The critical property: **an AI-dispatched action and a UI click resolve to the e
 
 ## Screenshots or a demo video
 
-_Add screenshots or a short screen recording here before submitting, showing:_
-1. _Compose via natural language — fields visibly filling in, then the confirmation step_
-2. _Search/filter via natural language — the main inbox updating with real results_
-3. _"Open the latest email from David" — the assistant navigating to the detail view_
-4. _"Reply to this" while an email is open_
-5. _A new email arriving and the inbox updating without a manual refresh_
+Real captures from live browser testing against a real, authenticated Gmail account, with the assistant running on the dev-only Ollama provider (`qwen2.5:7b`) — not staged or mocked.
+
+**1. AI compose/fill via natural language**
+"Compose an email to kirubhak785@gmail.com saying hi" — the compose form opens and visibly fills in To/Subject/Body before any send confirmation.
+
+![AI compose/fill via natural language](docs/screenshots/01-compose-fill.jpg)
+
+**2. AI search/filter updating the real inbox**
+"Show only unread emails from this week" — the main inbox list filters to real results, and the assistant panel renders rich preview cards (not just text) for the same real emails.
+
+![AI search/filter updating the real Gmail inbox, with rich preview cards](docs/screenshots/02-search-filter-rich-previews.jpg)
+
+**3. Context-aware "Reply to this"**
+With a real email open, "Reply to this" correctly resolves the recipient/subject and quotes the original message.
+
+![Context-aware "Reply to this" with the original email quoted](docs/screenshots/03-reply-to-this.jpg)
+
+**4. AI "Open the latest email from Google"**
+`SEARCH_EMAILS` → `OPEN_EMAIL`, resolving to the actual most recent Google email in the inbox — shown by the "Searched emails" / "Opened email" action badges in the assistant transcript.
+
+![AI resolving "the latest email from Google" to a real OPEN_EMAIL action](docs/screenshots/04-open-latest-email-google.jpg)
+
+**Not yet captured:** a new email arriving and the inbox updating without a manual refresh (SSE real-time sync) — this needs an external email to land in the test account during a live session, which hasn't been set up yet.
 
 ## What I'd improve with more time
 
