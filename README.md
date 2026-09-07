@@ -50,7 +50,7 @@ Copy `.env.example` to `.env.local` and fill in:
 | `GOOGLE_CLIENT_ID` | Yes | OAuth 2.0 Client ID from Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | Yes | OAuth 2.0 Client Secret |
 | `GOOGLE_REDIRECT_URI` | Yes | `http://localhost:3000/api/auth/callback` for local dev |
-| `SESSION_SECRET` | Yes | Random string, 32+ chars (`openssl rand -base64 32`) — encrypts the session cookie |
+| `SESSION_SECRET` | Yes | Random string, 32+ chars — encrypts the session cookie. Generate with `openssl rand -base64 32` (Git Bash/WSL/macOS/Linux), or in plain Windows PowerShell: `[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))` |
 | `ANTHROPIC_API_KEY` | Yes (unless using the Ollama dev provider below) | Enables the AI assistant in production and by default |
 | `GOOGLE_PUBSUB_TOPIC` | No | Only for the optional real Gmail push path — see below |
 | `GMAIL_PUBSUB_VERIFICATION_TOKEN` | No | Shared-secret query token for the Pub/Sub webhook |
