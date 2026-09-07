@@ -98,7 +98,7 @@ Open [http://localhost:3000](http://localhost:3000), sign in with Google, and gr
 npm test
 ```
 
-139 tests across 13 files: mail query building, Gmail message normalization, `GmailMailService` (list/get/send/watch/history, token-refresh capture), `buildRawMessage` (RFC 2822 raw message construction), reply/forward draft construction, the AI action validator (including the send-confirmation gate), the assistant orchestration loop (compose/search/filter/navigate/open-email/reply intents, invalid input), the application action layer itself (the Zustand store), the Gmail Pub/Sub webhook (token verification in prod/dev), the SSE sync stream route, the realtime-sync event listeners, dev-only Ollama provider selection, and the Ollama response-translation adapter (including the same tool-loop and confirmation-binding tests run against it).
+155 tests across 15 files: mail query building, Gmail message normalization, `GmailMailService` (list/get/send/watch/history, token-refresh capture), `buildRawMessage` (RFC 2822 raw message construction), reply/forward draft construction, the AI action validator (including the send-confirmation gate), the assistant orchestration loop (compose/search/filter/navigate/open-email/reply intents, invalid input), the application action layer itself (the Zustand store), a regression suite covering the assistant's dispatch-to-store filter merge (a real folder-loss bug found via live testing, fixed and covered here) and the underlying query-serialization helper, the Gmail Pub/Sub webhook (token verification in prod/dev), the SSE sync stream route, the realtime-sync event listeners, dev-only Ollama provider selection, the Ollama response-translation adapter (including the same tool-loop and confirmation-binding tests run against it), and a system-prompt regression guard for the assistant's tool-selection disambiguation rules.
 
 ### Optional — local AI provider via Ollama (dev-only, zero API cost)
 
@@ -217,7 +217,7 @@ With a real email open, "Reply to this" correctly resolves the recipient/subject
 
 ![AI resolving "the latest email from Google" to a real OPEN_EMAIL action](docs/screenshots/04-open-latest-email-google.jpg)
 
-**Not yet captured:** a new email arriving and the inbox updating without a manual refresh (SSE real-time sync) — this needs an external email to land in the test account during a live session, which hasn't been set up yet.
+**Real-time sync (live-verified, not screenshotted):** the SSE + Gmail-history-polling path was tested against a real, authenticated Gmail account — a new message (both a self-sent test email and, independently, an externally-arriving email) appeared in the inbox automatically with no manual page refresh. This isn't captured as a screenshot here since the before/after states occur several seconds apart in one continuously-updating view rather than as a single static comparison shot; see [Real-time synchronization architecture](#real-time-synchronization-architecture) for how it was verified.
 
 ## What I'd improve with more time
 
@@ -251,8 +251,8 @@ With a real email open, "Reply to this" correctly resolves the recipient/subject
 - Anthropic Claude by default/production; optional dev-only local Ollama provider for zero-cost testing (see setup above)
 
 **Real-time sync**
-- New mail appears in the inbox without a manual browser refresh, via Server-Sent Events
-- Optional production-grade path using real Gmail Pub/Sub push notifications
+- New mail appears in the inbox without a manual browser refresh, via Server-Sent Events — live-verified against a real Gmail account (see below)
+- Optional production-grade path using real Gmail Pub/Sub push notifications — implemented in code, but requires a public HTTPS endpoint to configure and has not been verified in this environment
 
 ### AI assistant architecture
 
@@ -315,6 +315,8 @@ The assistant is never allowed to execute arbitrary code — it can only ever pr
 
 - Handles `historyId` expiry (Gmail retains ~7 days of history) by resyncing from "now" rather than erroring the connection.
 - The browser's native `EventSource` reconnects automatically on drops, which also re-reads the session cookie — a natural point to pick up a refreshed OAuth token.
+
+**Live-verified:** tested against a real, authenticated Gmail account by sending a real message and separately receiving an unrelated real external message — both appeared in the inbox automatically with no manual refresh. Confirmed both visually and via server logs, where each new message produced its own SSE `new_mail` event and a corresponding `/api/mail/list` auto-refresh.
 
 **Optional production path:** `POST /api/gmail/watch` registers a real `users.watch()` Pub/Sub subscription. `POST /api/webhooks/gmail-pubsub` receives Gmail's push notification and wakes the matching user's SSE loop immediately via an in-process event bus (`src/lib/sync/event-bus.ts`), rather than waiting for the next poll tick. This is a pure latency optimization on top of the same polling logic — if it's not configured (no public URL, no topic), the app runs correctly on the polling fallback alone.
 
